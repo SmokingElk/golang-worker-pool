@@ -8,8 +8,11 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
-    container: golang:1.24.3-alpine
-
+    container: 
+      image: golang:1.24.3-alpine
+      volumes:
+        - ${{ github.workspace }}:/
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
