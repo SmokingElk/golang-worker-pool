@@ -1,6 +1,6 @@
 ENTRY_PATH = ./cmd/app/main.go
-OUT_PATH = ./worker-pull-app.exe
-TEST_PATH = ./internal/worker_pull/
+OUT_PATH = ./worker-pool-app.exe
+TEST_PATH = ./internal/worker_pool/
 
 run:
 	go run $(ENTRY_PATH)
