@@ -1,0 +1,5 @@
+logs_path: ./static/order-logs.txt
+timeout_seconds: 2
+worker: 
+  queue_size: 256
+  number_of_workers: 4
