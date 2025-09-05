@@ -1,4 +1,4 @@
-package worker_pull
+package worker_pool
 
 import (
 	"context"
@@ -17,8 +17,10 @@ type WorkerPoolConfig struct {
 type WorkerPool struct {
 	tasksQueue  chan Task
 	workerGroup sync.WaitGroup
-	stopped     bool
 	cancelTasks context.CancelFunc
+
+	stoppedMtx sync.RWMutex
+	stopped    bool
 }
 
 // создание WorkerPool с параметрами
@@ -56,6 +58,9 @@ func NewWorkerPool(numberOfWorkers int) *WorkerPool {
 
 // Submit - добавить таску в воркер пул
 func (wp *WorkerPool) Submit(task Task) {
+	wp.stoppedMtx.RLock()
+	defer wp.stoppedMtx.RUnlock()
+
 	if wp.stopped {
 		return
 	}
@@ -65,6 +70,9 @@ func (wp *WorkerPool) Submit(task Task) {
 
 // SubmitWait - добавить таску в воркер пул и дождаться окончания ее выполнения
 func (wp *WorkerPool) SubmitWait(task Task) {
+	wp.stoppedMtx.RLock()
+	defer wp.stoppedMtx.RUnlock()
+
 	if wp.stopped {
 		return
 	}
@@ -72,27 +80,35 @@ func (wp *WorkerPool) SubmitWait(task Task) {
 	var waitTask sync.WaitGroup
 	waitTask.Add(1)
 
-	wp.Submit(func() {
+	wp.tasksQueue <- func() {
 		task()
 		waitTask.Done()
-	})
+	}
 
 	waitTask.Wait()
 }
 
 // Stop - остановить воркер пул, дождаться выполнения только тех тасок, которые выполняются сейчас
 func (wp *WorkerPool) Stop() {
+	wp.stoppedMtx.Lock()
+	defer wp.stoppedMtx.Unlock()
+
 	if wp.stopped {
 		return
 	}
 
 	wp.cancelTasks()
-	wp.StopWait()
+	wp.stopped = true
+	close(wp.tasksQueue)
+	wp.workerGroup.Wait()
 }
 
 // StopWait - остановить воркер пул, дождаться выполнения всех тасок, даже тех,
 // что не начали выполняться, но лежат в очереди
 func (wp *WorkerPool) StopWait() {
+	wp.stoppedMtx.Lock()
+	defer wp.stoppedMtx.Unlock()
+
 	if wp.stopped {
 		return
 	}

@@ -1,4 +1,4 @@
-package worker_pull_test
+package worker_pool_test
 
 import (
 	"context"
@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SmokingElk/golang-worker-pull/internal/worker_pull"
+	"github.com/SmokingElk/golang-worker-pool/internal/worker_pool"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestSubmit(t *testing.T) {
 	t.Run("completes asynchronously after submit", func(t *testing.T) {
-		wp := worker_pull.NewWorkerPool(4)
+		wp := worker_pool.NewWorkerPool(4)
 		defer wp.Stop()
 
 		mtx := sync.Mutex{}
@@ -21,17 +21,19 @@ func TestSubmit(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 
-		for range expectedCounter {
-			wp.Submit(func() {
-				time.Sleep(time.Millisecond * 35)
-				mtx.Lock()
-				defer mtx.Unlock()
-				counter++
+		var task worker_pool.Task = func() {
+			time.Sleep(time.Millisecond * 35)
+			mtx.Lock()
+			defer mtx.Unlock()
+			counter++
 
-				if counter == expectedCounter {
-					cancel()
-				}
-			})
+			if counter == expectedCounter {
+				cancel()
+			}
+		}
+
+		for range expectedCounter {
+			wp.Submit(task)
 		}
 
 		timeoutExit := false
@@ -49,7 +51,7 @@ func TestSubmit(t *testing.T) {
 	})
 
 	t.Run("ignored for stopped worker pool", func(t *testing.T) {
-		wp := worker_pull.NewWorkerPool(4)
+		wp := worker_pool.NewWorkerPool(4)
 		wp.Stop()
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -78,7 +80,7 @@ func TestSubmit(t *testing.T) {
 
 func TestSubmitWait(t *testing.T) {
 	t.Run("completes synchronously after submit", func(t *testing.T) {
-		wp := worker_pull.NewWorkerPool(4)
+		wp := worker_pool.NewWorkerPool(4)
 		defer wp.Stop()
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -118,7 +120,7 @@ func TestSubmitWait(t *testing.T) {
 	})
 
 	t.Run("ignored for stopped worker pool", func(t *testing.T) {
-		wp := worker_pull.NewWorkerPool(4)
+		wp := worker_pool.NewWorkerPool(4)
 		wp.Stop()
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -147,7 +149,7 @@ func TestSubmitWait(t *testing.T) {
 
 func TestStop(t *testing.T) {
 	t.Run("waits for current tasks", func(t *testing.T) {
-		wp := worker_pull.NewWorkerPool(4)
+		wp := worker_pool.NewWorkerPool(4)
 
 		mtx := sync.Mutex{}
 		counter := 0
@@ -169,7 +171,7 @@ func TestStop(t *testing.T) {
 	})
 
 	t.Run("does not wait for tasks in queue", func(t *testing.T) {
-		wp := worker_pull.NewWorkerPool(4)
+		wp := worker_pool.NewWorkerPool(4)
 
 		mtx := sync.Mutex{}
 		counter := 0
@@ -192,7 +194,7 @@ func TestStop(t *testing.T) {
 	})
 
 	t.Run("does nothing for stopped worker", func(t *testing.T) {
-		wp := worker_pull.NewWorkerPool(4)
+		wp := worker_pool.NewWorkerPool(4)
 
 		mtx := sync.Mutex{}
 		counter := 0
@@ -218,7 +220,7 @@ func TestStop(t *testing.T) {
 
 func TestStopWait(t *testing.T) {
 	t.Run("wait for all added tasks", func(t *testing.T) {
-		wp := worker_pull.NewWorkerPool(4)
+		wp := worker_pool.NewWorkerPool(4)
 
 		mtx := sync.Mutex{}
 		counter := 0
@@ -241,7 +243,7 @@ func TestStopWait(t *testing.T) {
 	})
 
 	t.Run("does nothing for stopped worker", func(t *testing.T) {
-		wp := worker_pull.NewWorkerPool(4)
+		wp := worker_pool.NewWorkerPool(4)
 
 		mtx := sync.Mutex{}
 		counter := 0
