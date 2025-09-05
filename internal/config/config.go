@@ -8,6 +8,7 @@ import (
 )
 
 type Config struct {
+	LogsPath       string       `yaml:"logs_path" binding:"required"`
 	TimeoutSeconds int          `yaml:"timeout_seconds" binding:"required"`
 	Worker         WorkerConfig `yaml:"worker" binding:"required"`
 }

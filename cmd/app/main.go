@@ -1,34 +1,23 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
 
-	"github.com/SmokingElk/golang-worker-pull/internal/config"
-	"github.com/SmokingElk/golang-worker-pull/internal/worker_pull"
+	"github.com/SmokingElk/golang-worker-pool/internal/config"
+	"github.com/SmokingElk/golang-worker-pool/internal/worker_pool"
 	"github.com/joho/godotenv"
 )
 
 type OrderDTO struct {
 	OrderID    int     `json:"orderID"`
 	TotalPrice float32 `json:"totalPrice"`
-}
-
-var logs []string = []string{
-	`{ "orderID": 1, "totalPrice": 5.5 }`,
-	`{ "orderID": 874, "totalPrice": 23.75 }`,
-	`{ "orderID": 1562, "totalPrice": 12.99 }`,
-	`{ "orderID": 2987, "totalPrice": 45.3 }`,
-	`{ "orderID": 523, "totalPrice": 8.15 }`,
-	`{ "orderID": 2041, "totalPrice": 67.89 }`,
-	`{ "orderID": 3765, "totalPrice": 3.25 }`,
-	`{ "orderID": 987, "totalPrice": 19.5 }`,
-	`{ "orderID": 4312, "totalPrice": 34.67 }`,
-	`{ "orderID": 2598, "totalPrice": 9.99 }`,
 }
 
 func main() {
@@ -39,21 +28,32 @@ func main() {
 
 	cfg := config.MustLoadConfig()
 
+	file, err := os.Open(cfg.LogsPath)
+	if err != nil {
+		log.Fatal(fmt.Errorf("failed to load logs file: %w", err))
+	}
+	defer file.Close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(cfg.TimeoutSeconds))
 
-	wp := worker_pull.NewWorkerPoolConfigured(ctx, &worker_pull.WorkerPoolConfig{
+	wp := worker_pool.NewWorkerPoolConfigured(ctx, &worker_pool.WorkerPoolConfig{
 		QueueSize:       cfg.Worker.QueueSize,
 		NumberOfWorkers: cfg.Worker.NumberOfWorkers,
 	})
 
 	sumMtx := sync.Mutex{}
 	totalSum := float32(0.0)
+	processedCount := 0
 
-	for _, i := range logs {
-		wp.Submit(func() {
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		logRecord := scanner.Bytes()
+
+		var task worker_pool.Task = func() {
 			var order OrderDTO
 
-			err := json.Unmarshal([]byte(i), &order)
+			err := json.Unmarshal(logRecord, &order)
 
 			if err != nil {
 				log.Println(fmt.Errorf("failed to parse order: %w", err))
@@ -62,11 +62,16 @@ func main() {
 			sumMtx.Lock()
 			defer sumMtx.Unlock()
 			totalSum += order.TotalPrice
-		})
+			processedCount++
+		}
+
+		wp.Submit(task)
 	}
 
 	wp.StopWait()
 	cancel()
 
-	fmt.Printf("Sum of orders prices: %f", totalSum)
+	averagePrice := totalSum / float32(processedCount)
+
+	fmt.Printf("Average price of orders: %f", averagePrice)
 }
